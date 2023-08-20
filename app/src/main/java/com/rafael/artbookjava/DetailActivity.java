@@ -11,7 +11,11 @@ import androidx.core.content.ContextCompat;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteStatement;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageDecoder;
 import android.net.Uri;
 import android.os.Build;
@@ -31,6 +35,7 @@ public class DetailActivity extends AppCompatActivity {
     ActivityResultLauncher<Intent> activityResultLauncher;
     ActivityResultLauncher<String> permissionLauncher;
     Bitmap selectedImage;
+    SQLiteDatabase database;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,6 +47,43 @@ public class DetailActivity extends AppCompatActivity {
 
         registerLauncher();
 
+        database = this.openOrCreateDatabase("Arts", MODE_PRIVATE, null);
+
+        Intent intent = getIntent();
+        String info = intent.getStringExtra("info");
+
+        if (info.equals("new")) {
+
+
+        } else {
+            int artId = intent.getIntExtra("artId", 0);
+            binding.button.setVisibility(View.INVISIBLE);
+            binding.imageView.setClickable(false);
+
+            try {
+
+                Cursor cursor = database.rawQuery("SELECT * FROM arts WHERE id =?", new String[]{String.valueOf(artId)});
+                int artNameIx = cursor.getColumnIndex("artname");
+                int painterNameIx = cursor.getColumnIndex("paintername");
+                int imageIx = cursor.getColumnIndex("image");
+
+                while (cursor.moveToNext()) {
+
+                    binding.artNameEtx.setText(cursor.getString(artNameIx));
+                    binding.artistNameEtx.setText(cursor.getString(painterNameIx));
+
+                    byte[] bytes = cursor.getBlob(imageIx);
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    binding.imageView.setImageBitmap(bitmap);
+                }
+
+                cursor.close();
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
 
     }
 
@@ -51,11 +93,31 @@ public class DetailActivity extends AppCompatActivity {
         String name = binding.artNameEtx.getText().toString();
         String artistName = binding.artistNameEtx.getText().toString();
 
-        Bitmap smallImage = makeSmallerImage(selectedImage,300);
+        Bitmap smallImage = makeSmallerImage(selectedImage, 300);
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        smallImage.compress(Bitmap.CompressFormat.PNG,50,outputStream);
-       byte[] byteArray = outputStream.toByteArray();
+        smallImage.compress(Bitmap.CompressFormat.PNG, 50, outputStream);
+        byte[] byteArray = outputStream.toByteArray();
+
+
+        try {
+            database = this.openOrCreateDatabase("Arts", MODE_PRIVATE, null);
+            database.execSQL("CREATE TABLE IF NOT EXISTS arts(id INTEGER PRIMARY KEY, artname VARCHAR,paintername VARHAR, image BLOB)");
+
+            String sqlString = "INSERT INTO arts (artname,paintername,image) VALUES(?,?,?)";
+            SQLiteStatement sqLiteStatement = database.compileStatement(sqlString);
+            sqLiteStatement.bindString(1, name);
+            sqLiteStatement.bindString(2, artistName);
+            sqLiteStatement.bindBlob(3, byteArray);
+            sqLiteStatement.execute();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        Intent intent = new Intent(DetailActivity.this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        startActivity(intent);
 
     }
 
